@@ -1,0 +1,166 @@
+# # Use proxySettings to enable cluster VMs to pull images via an http/https proxy.
+# # If your proxy does not support both protocols, set both "http" and "https" to the same endpoint.
+# proxySettings:
+#   http:
+#     host: "http://proxy-wsa.esl.cisco.com"
+#     port: "80"
+#   https:
+#     host: "http://proxy-wsa.esl.cisco.com"
+#     port: "80"
+#   noProxy:
+#     - "localhost"
+#     - ".cisco"
+#     - "127.0.0.0/8"
+#     - "::1"
+#     - "10.0.0.0/8"
+#     - "172.16.0.0/12"
+#     - "192.168.0.0/16"
+# # Additional CA certificates specified below will be trusted on new VMs.
+# # CA certificates must exist on this machine and will be copied into a Secret
+# # object on the target cluster(s).
+# caCerts:
+#   files:
+#     # hostPath is the path, on this machine, to a file containing a CA certificate in .pem format.
+#     - hostPath: "/home/iep/devca.crt"
+#       # name will be used as the name for the cluster Secret. It must be unique across files specified in this list.
+#       name: "dev-thorn3r"
+# Required: NTP servers to configure on all provisioned management-cluster nodes.
+# At least one entry is required to ensure time synchronization across nodes and SmartSwitches.
+ntpSources:
+  - "10.64.58.50"
+# Kind node image tag to provision a bootstrap cluster from.
+kindNodeImage: "kindest/node:latest"
+mgmtCluster:
+  # The name to be used for your Mgmt Cluster
+  # Keep this at 26 characters or less to avoid Kubernetes 63-character
+  # limits in chart-generated resource names/labels.
+  name: "hs-leader"
+  # Optional VM sizing profile. Supported values: "standard", "hypershield".
+  # - standard: control plane 8 CPU/16384 MiB, worker 8 CPU/8192 MiB.
+  # - hypershield: control plane 8 CPU/16384 MiB, worker 16 CPU/32768 MiB.
+  vmProfile: "hypershield"
+  # Optional explicit VM sizing overrides. These take precedence over vmProfile defaults.
+  # vmSizing:
+  #   controlPlane:
+  #     numCPUs: 8
+  #     memoryMiB: 32768
+  #   worker:
+  #     numCPUs: 8
+  #     memoryMiB: 32768
+  # Optional Kubernetes pod and service CIDR overrides.
+  # Use these if your environment routes the default ranges (pod: 10.20.0.0/16, service: 10.30.0.0/16).
+  # Ensure both CIDRs do not overlap with any networks[*].ipam.addresses values.
+  # Cisco-internal-safe example for deployments where 10.0.0.0/16 is reserved for non-routable Kubernetes/VPC use:
+  # podCIDR: "10.0.0.0/17"
+  # serviceCIDR: "10.0.128.0/17"
+  # controlPlaneReplicas: 3
+  # workerReplicas: 2
+  apiServer:
+    # A static IP address for the Mgmt Cluster API virtual IP.
+    # This address should not be part of any DHCP range.
+    # If IPAM is enabled, ensure this address is not part of the ipam.addresses range.
+    address: "10.75.37.131"
+    # certSANs can be used to add Subject Alternative Names to the kube-apiserver serving certificate.
+    # Each secondary network's apiServerVIP is added automatically, so it does not need to be listed here.
+    certSANs: []
+  # Whether to inherit authorized keys from the ssh-agent
+  # This should be set to true unless you specify additional nodeAuthorizedKeys.
+  nodeAuthorizedKeysFromAgent: true
+  # Additional SSH authorized keys for node access in the format of a .pub file
+  nodeAuthorizedKeys: []
+  # Whether to create and use an SSH keypair for node access
+  # Only takes effect if no other keys were found via the agent or nodeAuthorizedKeys.
+  createAuthorizedKey: true
+  # Enable the Kubernetes Gateway API on the management cluster.
+  # When enabled:
+  #   - Gateway API CRDs are installed before Cilium starts.
+  #   - Cilium is configured with gatewayAPI.enabled=true and l2announcements.enabled=true.
+  gatewayAPI: true
+  # Path to a container image archive
+  imageArchives:
+    - "/opt/installer/mgmt-linux-amd64.tar.zst"
+registry:
+  # IP address for the Harbor registry LoadBalancer service.
+  # Must be a static IP outside any DHCP range, routable from all nodes, and
+  # different from mgmtCluster.apiServer.address to avoid ARP conflicts.
+  address: "10.75.37.132"
+  # Path to a container image archive
+  localImageArchives:
+    - "/opt/installer/mgmt-linux-amd64.tar.zst"
+    - "/opt/installer/hypershield-linux-amd64.tar.zst"
+vsphere:
+  # IP address of your vCenter instance.
+  endpoint: "vcenter.lab.com"
+  # SHA256 thumbprint for your vCenter instance.
+  # See https://knowledge.broadcom.com/external/article/312777/finding-sha1-and-sha256-thumbprints-for.html
+  thumbprint: "95:5D:70:E4:72:DA:A9:3E:0C:4C:25:1E:E9:F6:19:AF:0F:C4:8A:F2:DA:6A:04:25:9A:C5:53:9D:96:36:1D:48"
+  # vSphere datacenter to deploy to.
+  datacenter: "DC_LAB"
+  # vSphere datastore to use for storage (e.g. "datastore1").
+  datastore: "37.37-HD"
+  # vSphere folder where new VMs will be created (e.g. "isovalent-operator").
+  folder: "hypershield"
+  # vSphere resource pool to use for creating new VMs.
+  # If none exist, you can use the default/root pool "*/Resources".
+  resourcePool: "*/Resources"
+  # Name a VM template (e.g. "node.vmtx"). If it doesn't exist, it will be
+  # created during bootstrap if 'ova' is specified.
+  template: "hs-node-template"
+  # Path to an OVA file to use for VM template creation.
+  ova: "/opt/installer/node.ova"
+  # vSphere username
+  username: "administrator@vsphere.local"
+  # vSphere password
+  password: "password"
+  # Optional: configure the default vsphere-csi StorageClass.
+  # storageClass:
+  #   default:
+  #     # storagePolicyName sets the vSphere storage policy for dynamically-
+  #     # provisioned volumes. When set, the vsphere-csi provisioner associates
+  #     # new volumes with this policy. Leave unset to use the vSphere default behavior.
+  #     storagePolicyName: "vSAN Default Storage Policy"
+# The FIRST network listed is the management network: Kubernetes is built on it.
+# It provides each node's default route and the node's Kubernetes InternalIP
+# (the vSphere cloud provider is pinned to this network by name). Any additional
+# networks (e.g. a SmartSwitch network) are attached as secondary NICs: nodes get
+# an address on them for L2 reachability, but they never install a default route
+# or carry the node IP. Use networks[*].routes to reach subnets behind a secondary
+# network (e.g. SmartSwitch Service IPs). Keep the management network first.
+#
+# Every SECONDARY network must set 'apiServerVIP': a highly-available
+# kube-apiserver virtual IP announced on that network's NIC via a dedicated
+# kube-vip instance. Clients on that network (e.g. SmartSwitches) use it to reach
+# the API server instead of a single node's address. It must be outside the
+# network's ipam.addresses range and unique across all VIPs (control-plane
+# address, other apiServerVIPs, and registry.address); it is added to the API
+# server certificate SANs automatically. Do NOT set apiServerVIP on the first
+# (management) network — its API VIP is mgmtCluster.apiServer.address.
+networks:
+  # Name of the network to connect new VMs to
+  - name: "VM Network"
+## By default, new VMs will obtain addresses via DHCP.
+## To enable static IPAM, uncomment and modify the section below.
+## Note the indentation for 'ipam' should match 'name' immediately
+## preceding this comment.
+    ipam:
+     name: "external"
+     addresses:
+       # The management cluster requires at least 2 IP addresses.
+       # If you plan to reuse this pool to deploy a LoadBalancer, include
+       # atleast 4 additional addresses.
+       - 10.75.37.133-10.75.37.135
+     prefix: 24
+     gateway: 10.75.37.1
+     nameservers:
+       - 10.75.37.88
+## Secondary network example (e.g. a SmartSwitch network). Attached as an extra
+## NIC on every node; it never installs a default route or the node IP. It must
+## declare an apiServerVIP for a highly-available API endpoint on this network.
+#  - name: "SmartSwitch Network"
+#    # HA kube-apiserver VIP on this network. Outside the ipam.addresses range
+#    # below and distinct from every other VIP. Auto-added to the API cert SANs.
+#    apiServerVIP: 100.64.0.10
+#    ipam:
+#      addresses:
+#        - 100.64.0.100-100.64.0.150
+#      prefix: 24
