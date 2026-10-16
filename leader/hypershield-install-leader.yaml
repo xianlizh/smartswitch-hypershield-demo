@@ -1,0 +1,112 @@
+# Example Hypershield configuration for a Timescape leader.
+# Replace every value marked REPLACE before running isoctl.
+timescape:
+  profile: leader
+
+  # Shared by the gRPC server, optional Public API, and UI listeners. Gateway
+  # API uses the distinct listener hostnames below for SNI routing.
+  ip: "10.75.37.136" # REPLACE with the Timescape Gateway load-balancer IP.
+
+  # The Timescape gateway, server, and UI must reach the OIDC identity provider. If your OIDC identity provider can only be reached via HTTP proxy, uncomment these workload-specific overrides even when bootstrap.yaml does not use proxySettings.
+  # overrides:
+  #   - 'gateway.extraEnv[0].name=HTTP_PROXY'
+  #   - 'gateway.extraEnv[0].value=http://proxy.example.com:8080'
+  #   - 'gateway.extraEnv[1].name=HTTPS_PROXY'
+  #   - 'gateway.extraEnv[1].value=http://proxy.example.com:8080'
+  #   - 'gateway.extraEnv[2].name=NO_PROXY'
+  #   - 'gateway.extraEnv[2].value=localhost\,127.0.0.1\,.svc\,.cluster.local'
+  #   - 'server.extraEnv[0].name=HTTP_PROXY'
+  #   - 'server.extraEnv[0].value=http://proxy.example.com:8080'
+  #   - 'server.extraEnv[1].name=HTTPS_PROXY'
+  #   - 'server.extraEnv[1].value=http://proxy.example.com:8080'
+  #   - 'server.extraEnv[2].name=NO_PROXY'
+  #   - 'server.extraEnv[2].value=localhost\,127.0.0.1\,.svc\,.cluster.local'
+  #   - 'ui.extraEnv[0].name=HTTP_PROXY'
+  #   - 'ui.extraEnv[0].value=http://proxy.example.com:8080'
+  #   - 'ui.extraEnv[1].name=HTTPS_PROXY'
+  #   - 'ui.extraEnv[1].value=http://proxy.example.com:8080'
+  #   - 'ui.extraEnv[2].name=NO_PROXY'
+  #   - 'ui.extraEnv[2].value=localhost\,127.0.0.1\,.svc\,.cluster.local'
+  overrides:
+    - 'ui.observability.topology.enabled=true'
+    # - 'ui.observability.connections.enabled=true'
+    # - 'ui.observability.explorer.enabled=true'
+    # - 'ui.observability.multicast.enabled=true'
+
+  # Secure Connector is required for the leader profile and needs a separate
+  # load-balancer IP. Set hostname when followers dial it by DNS name; the
+  # operator adds the hostname to the server certificate SANs.
+  secureConnector:
+    ip: "10.75.37.137" # REPLACE with a separate load-balancer IP.
+    hostname: "secure-connector-leader.lab.cisco" # REPLACE; followers use this name.
+
+  server:
+    hostname: "timescape-grpc.lab.cisco" # REPLACE; must differ from ui.hostname and publicAPI.hostname.
+    rbac:
+      oidcIssuerURL: "https://dex.lab.cisco:32000" # REPLACE.
+      oidcClientID: "hs-lab"
+
+      # Convenient shorthand: grant the built-in administrator role to these
+      # OIDC identity usernames, which normally come from the email claim.
+      adminEmails:
+        - "admin@lab.cisco" # REPLACE with an OIDC identity username.
+
+      # Grant built-in Timescape roles to OIDC users or groups. isoctl trims
+      # surrounding whitespace; Timescape then matches values exactly and
+      # case-sensitively. Users and groups in one binding are ORed. An identity
+      # can match multiple bindings and receives every matched role.
+      bindings:
+        - role: "hypershield:administrator"
+          users:
+            - "admin@lab.cisco" # REPLACE with an OIDC identity username.
+          groups:
+            - "platform-admins" # REPLACE with an OIDC group name.
+        - role: "hypershield:read-only"
+          groups:
+            - "viewers" # REPLACE with an OIDC group name.
+        - role: "hypershield:policy-manager"
+          users:
+            - "admin@lab.cisco" # REPLACE with an OIDC identity username.
+
+      # Optional for a private identity provider. isoctl reads the PEM file and
+      # creates the OIDC CA ConfigMap. Omit for publicly trusted providers.
+      oidcCAFile: "/home/iep/hypershield/leader/oidc/dex-lab/dex-ca.crt"
+
+  # The Public API is optional and leader-only. It shares timescape.ip and
+  # reuses compatible server OIDC settings and role bindings. Its hostname must
+  # differ from the server and UI hostnames.
+  publicAPI:
+    enabled: true
+    hostname: "timescape-api.lab.cisco" # REPLACE.
+
+  # All enabled listeners share timescape.ip and use distinct hostnames.
+  ui:
+    enabled: true
+    hostname: "timescape.lab.cisco" # REPLACE; must differ from server.hostname.
+    auth:
+      oidc:
+        # Required when the leader UI is enabled. isoctl creates a Secret from
+        # this file, and the operator syncs it into hubble-timescape.
+        clientSecretFile: "/home/iep/hypershield/leader/oidc/dex-lab/ui-client-secret" # REPLACE with a local file path.
+
+        # isoctl sets the redirect URL to:
+        # https://<timescape.ui.hostname>/oauth2/callback
+        # Register that redirect URI with the identity provider.
+
+        # Optional overrides. Omit to inherit the server RBAC settings.
+        # issuerURL: "https://identity.example.com/oauth2/default"
+        # clientID: "REPLACE_WITH_OIDC_CLIENT_ID"
+
+        # Optional name of an existing ConfigMap in hubble-timescape containing
+        # the UI issuer CA under the key ca.crt. Omit for publicly trusted IdPs.
+        # issuerCAConfigMapName: "oidc-ca"
+
+  # SCC is an optional leader add-on, not a Timescape profile. Production and
+  # staging tokens are restricted to the corresponding tenant UUID.
+  # scc:
+  #   enabled: true
+  #   tenantID: "00000000-0000-0000-0000-000000000000"
+  #   staging:
+  #     enabled: true
+  #     tenantID: "11111111-1111-4111-8111-111111111111"
+  #
