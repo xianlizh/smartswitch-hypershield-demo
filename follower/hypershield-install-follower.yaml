@@ -1,0 +1,49 @@
+# Example Hypershield configuration for a Timescape follower.
+# In the leader Timescape UI, select Followers > Register Follower, save the
+# displayed one-time password as the join credential, export the two leader CA
+# files, and replace every value marked REPLACE before running isoctl.
+timescape:
+  profile: follower
+
+  follower:
+    # Human-readable name shown on the leader. isoctl also configures the local
+    # ingester to tag flows and events with this name.
+    clusterName: "hs-follower" # REPLACE with the exact follower name entered in the leader Timescape UI.
+
+    # External gRPC address of the leader, including the port.
+    leaderAddress: "timescape-grpc.lab.cisco:443" # REPLACE with the leader Timescape endpoint.
+
+    # This follower's Kubernetes API URL, reachable from the leader for policy
+    # synchronization.
+    k8sHost: "https://10.75.37.138:6443" # REPLACE with this follower's reachable Kubernetes API endpoint.
+
+    # isoctl reads the saved join credential and creates the follower-join
+    # credentials Secret used by the operator.
+    credentialFile: "/home/iep/hypershield/follower/certs/credential" # REPLACE with the join credential copied from the leader Timescape UI.
+
+    # isoctl reads the leader CA PEM and creates the follower-join CA ConfigMap.
+    leaderCAFile: "/home/iep/hypershield/follower/certs/leader-ca.crt" # REPLACE with the exported leader Timescape CA file.
+
+  # External LoadBalancer IP for the Timescape ingester. SmartSwitches send
+  # HTTPS system status to TCP/4260 and gRPC policy status to TCP/4261.
+  #
+  # This IP must be on the SmartSwitch subnet: the second network in a
+  # two-network installation or the management network in a single-network
+  # installation. Keep it distinct from every other exposure IP, including
+  # clc.ip. isoctl validates the address but cannot verify subnet membership.
+  ingester:
+    ip: "10.75.37.143" # REPLACE with an unused IP on the SmartSwitch Layer 2 network.
+
+  # Secure Connector is required for the follower profile. The host can be the
+  # leader Secure Connector IP or the DNS name configured by the leader.
+  secureConnector:
+    serverAddress: "secure-connector-leader.lab.cisco:443" # REPLACE with the leader Secure Connector endpoint.
+    caFile: "/home/iep/hypershield/follower/certs/sc-server-ca.crt" # REPLACE with the exported leader Secure Connector CA file.
+
+# The optional Connection Logs Connector receives SmartSwitch IPFIX on
+# UDP/4739 and sends ConnectionLogs to this follower's Timescape ingester. Its
+# external LoadBalancer IP must be on the SmartSwitch network and must differ
+# from timescape.ingester.ip.
+clc:
+  enabled: true
+  ip: "10.75.37.144"
